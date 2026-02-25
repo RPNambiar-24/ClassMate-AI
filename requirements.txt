@@ -1,0 +1,5 @@
+flask
+APScheduler
+requests
+python-dotenv
+google-generativeai

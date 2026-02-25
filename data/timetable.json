@@ -1,0 +1,120 @@
+{
+  "Monday": [
+    {
+      "subject": "Learning for Image Processing",
+      "time": "08:50"
+    },
+    {
+      "subject": "Cloud Computing",
+      "time": "09:40"
+    },
+    {
+      "subject": "Software Engineering",
+      "time": "10:45"
+    },
+    {
+      "subject": "Software Engineering",
+      "time": "11:35"
+    },
+    {
+      "subject": "Deep Learning for NLP",
+      "time": "14:05"
+    },
+    {
+      "subject": "Internet of Things",
+      "time": "14:55"
+    },
+    {
+      "subject": "Internet of Things",
+      "time": "15:45"
+    }
+  ],
+  "Tuesday": [
+    {
+      "subject": "Learning for Image Processing",
+      "time": "08:50"
+    },
+    {
+      "subject": "Software Engineering",
+      "time": "09:40"
+    },
+    {
+      "subject": "Deep Learning for NLP",
+      "time": "10:45"
+    },
+    {
+      "subject": "Deep Learning for NLP",
+      "time": "11:35"
+    }
+  ],
+  "Wednesday": [
+    {
+      "subject": "Deep Learning for Image Processing",
+      "time": "08:50"
+    },
+    {
+      "subject": "Deep Learning for Image Processing",
+      "time": "09:40"
+    },
+    {
+      "subject": "Cloud Computing",
+      "time": "10:45"
+    },
+    {
+      "subject": "Data Wrangling",
+      "time": "11:35"
+    },
+    {
+      "subject": "Data Wrangling",
+      "time": "12:25"
+    },
+    {
+      "subject": "Deep Learning for NLP",
+      "time": "14:05"
+    }
+  ],
+  "Thursday": [
+    {
+      "subject": "Internet of Things",
+      "time": "09:40"
+    },
+    {
+      "subject": "Data Wrangling",
+      "time": "10:45"
+    },
+    {
+      "subject": "Cloud Computing",
+      "time": "11:35"
+    },
+    {
+      "subject": "Cloud Computing",
+      "time": "12:25"
+    },
+    {
+      "subject": "Software Engineering",
+      "time": "14:05"
+    },
+    {
+      "subject": "Open Lab III (Apache Spark / Big ML / Research)",
+      "time": "14:55"
+    },
+    {
+      "subject": "Open Lab III (Apache Spark / Big ML / Research)",
+      "time": "15:45"
+    }
+  ],
+  "Friday": [
+    {
+      "subject": "Deep Learning for NLP",
+      "time": "09:40"
+    },
+    {
+      "subject": "Data Wrangling",
+      "time": "10:45"
+    },
+    {
+      "subject": "Software Engineering",
+      "time": "11:35"
+    }
+  ]
+}
