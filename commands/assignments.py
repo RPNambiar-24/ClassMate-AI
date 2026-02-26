@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-
+from utils.google_calendar import create_event, delete_event_by_title
 ASSIGNMENTS_PATH = "data/assignments.json"
 
 
@@ -31,7 +31,14 @@ def add_assignment(subject: str, due_date: str, type_: str = "assignment") -> st
     }
     data.append(entry)
     _save(data)
-
+    calendar_msg = create_event(subject, due_date, type_)
+    return (
+        f"{emoji} *{type_label} Added!*\n"
+        f"📚 Subject: *{subject}*\n"
+        f"📅 Due: *{due_date}* ({days_left}d left)\n"
+        f"🆔 ID: #{entry['id']}\n"
+        f"{calendar_msg}"
+    )
     emoji = "📝" if type_ == "assignment" else "📋"
     type_label = "Assignment" if type_ == "assignment" else "Test"
     days_left = (datetime.strptime(due_date, "%Y-%m-%d") - datetime.now()).days
@@ -81,6 +88,7 @@ def mark_done(item_id: int) -> str:
         if item["id"] == item_id:
             item["done"] = True
             _save(data)
+            delete_event_by_title(item["subject"], item["due_date"])
             emoji = "📝" if item["type"] == "assignment" else "📋"
             return f"✅ {emoji} *{item['subject']}* marked as done!"
     return f"❌ No item with ID #{item_id}. Use *!tasks* to see IDs."
@@ -135,3 +143,4 @@ def get_weekly_stats() -> dict:
         "pending_count": len([d for d in data if not d["done"]]),
         "subject_load": subject_counts
     }
+
