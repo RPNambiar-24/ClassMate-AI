@@ -15,17 +15,26 @@ CALENDAR_ID = "primary"
 
 def _get_service():
     creds = None
-    if os.path.exists(TOKEN_PATH):
+    token_env = os.getenv("GOOGLE_TOKEN_JSON")
+
+    if token_env:
+        creds = Credentials.from_authorized_user_info(json.loads(token_env), SCOPES)
+    elif os.path.exists(TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            with open(TOKEN_PATH, "w") as f:
-                f.write(creds.to_json())
+            # Update env token (local only)
+            if os.path.exists(TOKEN_PATH):
+                with open(TOKEN_PATH, "w") as f:
+                    f.write(creds.to_json())
         else:
-            print("[Calendar] token.json missing or invalid. Run auth_calendar.py first.")
+            print("[Calendar] No valid credentials.")
             return None
+
     return build("calendar", "v3", credentials=creds)
+
 
 
 def create_event(subject: str, due_date: str, type_: str = "assignment") -> str:
