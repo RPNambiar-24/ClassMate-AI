@@ -2,4 +2,5 @@ flask
 APScheduler
 requests
 python-dotenv
-google-generativeai
+groq
+pytz
