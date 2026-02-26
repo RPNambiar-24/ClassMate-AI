@@ -23,14 +23,12 @@ def webhook():
         chat_id = sender.get("chatId", "")
         my_phone = os.getenv("MY_PHONE", "")
 
-        # Only respond to your own number (leave MY_PHONE blank to allow all)
         if my_phone and not chat_id.startswith(my_phone):
             return jsonify({"status": "ignored"}), 200
 
         message_data = data.get("messageData", {})
         msg_type = message_data.get("typeMessage", "")
 
-        # Green API uses "textMessage" key (not "textMessageBody")
         text = (
             message_data.get("textMessageData", {}).get("textMessage", "")
             or message_data.get("textMessageData", {}).get("textMessageBody", "")
@@ -55,4 +53,3 @@ if __name__ == "__main__":
     start_scheduler()
     port = int(os.getenv("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
