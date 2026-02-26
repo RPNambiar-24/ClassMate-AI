@@ -116,6 +116,13 @@ def handle_message(chat_id: str, text: str):
         except ValueError:
             send_message(chat_id, "Usage: `!delete [id]` — e.g. `!delete 3`")
 
+    elif cmd == "!sync_calendar":
+        from utils.google_calendar import sync_timetable
+        send_message(chat_id, "⏳ Syncing timetable to Google Calendar...")
+        result = sync_timetable()
+        send_message(chat_id, result)
+
+
     # ---------- AI SUMMARY ----------
     elif cmd == "!summary":
         send_message(chat_id, "⏳ Generating your AI summary...")
@@ -131,3 +138,4 @@ def handle_message(chat_id: str, text: str):
     # ---------- UNKNOWN ----------
     else:
         send_message(chat_id, f"❓ Unknown command: *{parts[0]}*\nType *!help* to see all commands.")
+
