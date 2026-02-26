@@ -27,7 +27,6 @@ def _save_overrides(data):
 
 
 def get_today_classes(use_override=True):
-    """Returns today's classes, applying override if present."""
     today_name = datetime.now().strftime("%A")
     today_date = datetime.now().strftime("%Y-%m-%d")
     timetable = _load_timetable()
@@ -41,6 +40,14 @@ def get_today_classes(use_override=True):
     return today_name, classes
 
 
+def check_conflicts(day: str, new_time: str, classes: list) -> str:
+    for cls in classes:
+        cls_time = cls.get("time", cls.get("start", ""))
+        if cls_time == new_time:
+            return f"⚠️ *Conflict!* Already have *{cls['subject']}* at *{new_time}* on *{day}*."
+    return ""
+
+
 def view_timetable(day: str = None) -> str:
     timetable = _load_timetable()
     if day:
@@ -52,38 +59,39 @@ def view_timetable(day: str = None) -> str:
             return f"📅 {day}: No classes."
         lines = [f"📅 *{day} Timetable*"]
         for c in sorted(classes, key=lambda x: x.get("time", x.get("start", ""))):
-            lines.append(f"  🕐 {c['time']} — {c['subject']}")
+            lines.append(f"  🕐 {c.get('time', c.get('start'))} — {c['subject']}")
         return "\n".join(lines)
     else:
-        lines = ["📅 *Full Timetable*"]
-        for d in ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]:
+        lines = ["📅 *Full Weekly Timetable*"]
+        for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
             day_classes = timetable.get(d, [])
             if day_classes:
                 lines.append(f"\n*{d}*")
-                for c in sorted(classes, key=lambda x: x.get("time", x.get("start", ""))):
-                    lines.append(f"  🕐 {c['time']} — {c['subject']}")
+                for c in sorted(day_classes, key=lambda x: x.get("time", x.get("start", ""))):
+                    lines.append(f"  🕐 {c.get('time', c.get('start'))} — {c['subject']}")
         return "\n".join(lines)
 
 
 def add_class(day: str, time: str, subject: str) -> str:
-    """Add a class: !add_class Monday 09:00 Mathematics"""
     timetable = _load_timetable()
     day = day.capitalize()
     if day not in timetable:
         return f"❌ Invalid day: {day}"
+    conflict = check_conflicts(day, time, timetable[day])
+    if conflict:
+        return conflict
     timetable[day].append({"time": time, "subject": subject})
     _save_timetable(timetable)
     return f"✅ Added *{subject}* at *{time}* on *{day}*."
 
 
 def remove_class(day: str, time: str) -> str:
-    """Remove a class by day and time: !remove_class Monday 09:00"""
     timetable = _load_timetable()
     day = day.capitalize()
     if day not in timetable:
         return f"❌ Invalid day: {day}"
     before = len(timetable[day])
-    timetable[day] = [c for c in timetable[day] if c["time"] != time]
+    timetable[day] = [c for c in timetable[day] if c.get("time", c.get("start")) != time]
     if len(timetable[day]) == before:
         return f"❌ No class found at {time} on {day}."
     _save_timetable(timetable)
@@ -91,10 +99,6 @@ def remove_class(day: str, time: str) -> str:
 
 
 def override_today(classes_str: str) -> str:
-    """
-    Temporarily override today's timetable.
-    Format: !override 09:00 Math, 11:00 Physics
-    """
     today_date = datetime.now().strftime("%Y-%m-%d")
     classes = []
     for entry in classes_str.split(","):
@@ -102,7 +106,7 @@ def override_today(classes_str: str) -> str:
         if len(parts) == 2:
             classes.append({"time": parts[0].strip(), "subject": parts[1].strip()})
     _save_overrides({"date": today_date, "classes": classes})
-    lines = [f"✅ Today's timetable overridden:"]
+    lines = ["✅ *Today's timetable overridden:*"]
     for c in classes:
         lines.append(f"  🕐 {c['time']} — {c['subject']}")
     return "\n".join(lines)
