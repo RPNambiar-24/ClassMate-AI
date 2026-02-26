@@ -1,7 +1,7 @@
 {
   "Monday": [
     {
-      "subject": "Learning for Image Processing",
+      "subject": "Deep Learning for Image Processing",
       "time": "08:50"
     },
     {
@@ -31,7 +31,7 @@
   ],
   "Tuesday": [
     {
-      "subject": "Learning for Image Processing",
+      "subject": "Deep Learning for Image Processing",
       "time": "08:50"
     },
     {
@@ -49,11 +49,11 @@
   ],
   "Wednesday": [
     {
-      "subject": "Deep Learning for Image Processing",
+      "subject": "Deep Deep Learning for Image Processing",
       "time": "08:50"
     },
     {
-      "subject": "Deep Learning for Image Processing",
+      "subject": "Deep Deep Learning for Image Processing",
       "time": "09:40"
     },
     {
@@ -95,11 +95,11 @@
       "time": "14:05"
     },
     {
-      "subject": "Open Lab III (Apache Spark / Big ML / Research)",
+      "subject": "Open Lab III",
       "time": "14:55"
     },
     {
-      "subject": "Open Lab III (Apache Spark / Big ML / Research)",
+      "subject": "Open Lab III",
       "time": "15:45"
     }
   ],
