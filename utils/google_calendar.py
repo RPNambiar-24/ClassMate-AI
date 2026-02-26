@@ -52,8 +52,7 @@ def create_event(subject: str, due_date: str, type_: str = "assignment") -> str:
             },
         }
         created = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        link = created.get("htmlLink", "")
-        return f"📅 Added to Google Calendar.\n🔗 {link}" if link else "📅 Added to Google Calendar."
+        return f"📅 Added to Google Calendar."
     except Exception as e:
         print(f"[Calendar] Create error: {e}")
         return "⚠️ Could not add to Google Calendar."
