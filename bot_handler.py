@@ -11,6 +11,8 @@ from commands.summary import build_daily_summary
 HELP_TEXT = """
 🤖 *WhatsApp Study Bot — Commands*
 
+  !sync_calendar     — Push full timetable to Google Calendar
+
 📅 *Timetable*
   !tt                — Today's timetable
   !tt Monday         — Specific day
@@ -138,4 +140,5 @@ def handle_message(chat_id: str, text: str):
     # ---------- UNKNOWN ----------
     else:
         send_message(chat_id, f"❓ Unknown command: *{parts[0]}*\nType *!help* to see all commands.")
+
 
