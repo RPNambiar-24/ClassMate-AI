@@ -1,6 +1,7 @@
 from utils.whatsapp import send_message
 from commands.timetable import (
-    view_timetable, add_class, remove_class, override_today, clear_override
+    view_timetable, add_class, remove_class,
+    override_today, clear_override, set_saturday_override
 )
 from commands.assignments import (
     add_assignment, view_assignments, mark_done, delete_assignment
@@ -12,28 +13,28 @@ HELP_TEXT = """
 🤖 *WhatsApp Study Bot — Commands*
 
 📅 *Timetable*
-  !tt                — Today's timetable
-  !tt Monday         — Specific day
-  !tt all            — Full week
+  !tt                    — Today's timetable
+  !tt Monday             — Specific day
+  !tt all                — Full week
   !add_class [Day] [HH:MM] [Subject]
   !remove_class [Day] [HH:MM]
   !override [HH:MM Subject, HH:MM Subject]
   !clear_override
+  !saturday [Day/holiday/normal]
 
 📝 *Assignments & Tests*
-  !tasks             — All pending
-  !assignments       — Only assignments
-  !tests             — Only tests
+  !tasks                 — All pending
+  !assignments           — Only assignments
+  !tests                 — Only tests
   !add_assignment [Subject] [YYYY-MM-DD]
   !add_test [Subject] [YYYY-MM-DD]
-  !done [#id]        — Mark as done
-  !delete [#id]      — Delete item
+  !done [#id]            — Mark as done
+  !delete [#id]          — Delete item
 
-🌅 *AI Features*
-  !summary           — AI morning summary + weather
-  !weekly            — Weekly report
+🌅 *AI*
+  !summary               — AI summary now
 
-❓ !help             — This menu
+❓ !help                 — This menu
 """.strip()
 
 
@@ -44,11 +45,11 @@ def handle_message(chat_id: str, text: str):
     cmd = text.lower().strip()
     parts = text.strip().split()
 
-    # ---------- HELP ----------
+    # HELP
     if cmd in ["!help", "help", "hi", "hello", "start"]:
         send_message(chat_id, HELP_TEXT)
 
-    # ---------- TIMETABLE ----------
+    # TIMETABLE
     elif cmd == "!tt":
         from datetime import datetime
         day = datetime.now().strftime("%A")
@@ -56,10 +57,7 @@ def handle_message(chat_id: str, text: str):
 
     elif cmd.startswith("!tt "):
         arg = text[4:].strip()
-        if arg.lower() == "all":
-            send_message(chat_id, view_timetable())
-        else:
-            send_message(chat_id, view_timetable(arg))
+        send_message(chat_id, view_timetable() if arg.lower() == "all" else view_timetable(arg))
 
     elif cmd.startswith("!add_class "):
         args = text[11:].strip().split(" ", 2)
@@ -81,26 +79,30 @@ def handle_message(chat_id: str, text: str):
     elif cmd == "!clear_override":
         send_message(chat_id, clear_override())
 
-    # ---------- ASSIGNMENTS ----------
+    elif cmd.startswith("!saturday "):
+        arg = text[10:].strip()
+        send_message(chat_id, set_saturday_override(arg))
+
+    # ASSIGNMENTS
     elif cmd == "!tasks":
         send_message(chat_id, view_assignments())
 
     elif cmd == "!assignments":
-        send_message(chat_id, view_assignments(filter_type="assignment"))
+        send_message(chat_id, view_assignments("assignment"))
 
     elif cmd == "!tests":
-        send_message(chat_id, view_assignments(filter_type="test"))
+        send_message(chat_id, view_assignments("test"))
 
     elif cmd.startswith("!add_assignment ") or cmd.startswith("!add_test "):
         is_test = cmd.startswith("!add_test")
-        prefix_len = len("!add_test ") if is_test else len("!add_assignment ")
-        args = text[prefix_len:].strip().split(" ", 1)
+        prefix = len("!add_test ") if is_test else len("!add_assignment ")
+        args = text[prefix:].strip().split(" ", 1)
         if len(args) < 2:
             usage = "!add_test [Subject] [YYYY-MM-DD]" if is_test else "!add_assignment [Subject] [YYYY-MM-DD]"
             send_message(chat_id, f"Usage: `{usage}`")
         else:
             type_ = "test" if is_test else "assignment"
-            send_message(chat_id, add_assignment(args[0], args[1], type_=type_))
+            send_message(chat_id, add_assignment(args[0], args[1], type_))
 
     elif cmd.startswith("!done "):
         try:
@@ -116,28 +118,12 @@ def handle_message(chat_id: str, text: str):
         except ValueError:
             send_message(chat_id, "Usage: `!delete [id]` — e.g. `!delete 3`")
 
-    elif cmd == "!sync_calendar":
-        from utils.google_calendar import sync_timetable
-        send_message(chat_id, "⏳ Syncing timetable to Google Calendar...")
-        result = sync_timetable()
-        send_message(chat_id, result)
-
-
-    # ---------- AI SUMMARY ----------
+    # AI SUMMARY
     elif cmd == "!summary":
         send_message(chat_id, "⏳ Generating your AI summary...")
         summary = build_daily_summary()
         send_message(chat_id, f"🌅 *Today's Summary*\n\n{summary}")
 
-    elif cmd == "!weekly":
-        from commands.summary import build_weekly_report
-        send_message(chat_id, "⏳ Generating weekly report...")
-        report = build_weekly_report()
-        send_message(chat_id, f"📊 *Weekly Report*\n\n{report}")
-
-    # ---------- UNKNOWN ----------
+    # UNKNOWN
     else:
         send_message(chat_id, f"❓ Unknown command: *{parts[0]}*\nType *!help* to see all commands.")
-
-
-
