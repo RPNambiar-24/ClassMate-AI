@@ -10,13 +10,11 @@ from data.db import get_conn
 load_dotenv()
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Kolkata")
 
-
-def _get_all_chat_ids() -> list:
+def _get_all_chat_ids():
     conn = get_conn()
     rows = conn.execute("SELECT chat_id FROM users").fetchall()
     conn.close()
     return [r["chat_id"] for r in rows]
-
 
 def _run_async(coro):
     try:
@@ -27,7 +25,6 @@ def _run_async(coro):
             loop.run_until_complete(coro)
     except RuntimeError:
         asyncio.run(coro)
-
 
 def send_class_reminders():
     from utils.telegram_bot import send_message
@@ -56,7 +53,6 @@ def send_class_reminders():
                     msg += f"\n\n⚠️ Pending {'test' if item['type']=='test' else 'assignment'} due in *{days_left}d*."
                 _run_async(send_message(chat_id, msg))
 
-
 def send_daily_summaries():
     from utils.telegram_bot import send_message
     from commands.summary import build_daily_summary
@@ -66,7 +62,6 @@ def send_daily_summaries():
         name = get_user_name(chat_id)
         summary = build_daily_summary(chat_id)
         _run_async(send_message(chat_id, f"🌅 *Good Morning, {name}!*\n\n{summary}"))
-
 
 def send_escalation_reminders():
     from utils.telegram_bot import send_message
@@ -82,7 +77,6 @@ def send_escalation_reminders():
                     _run_async(send_message(chat_id, msg))
             except Exception as e:
                 print(f"[Scheduler] Escalation error: {e}")
-
 
 def send_evening_reminders():
     from utils.telegram_bot import send_message
@@ -100,28 +94,24 @@ def send_evening_reminders():
             lines.append(f"{urg} {emoji} *{item['subject']}* — {item['due_date']} ({days_left}d left)")
         _run_async(send_message(chat_id, "\n".join(lines)))
 
-
 def ask_saturday_timetable():
     from utils.telegram_bot import send_message
 
     tz = pytz.timezone(TIMEZONE)
     now = datetime.now(tz)
-    days_until_saturday = (5 - now.weekday()) % 7
-    if days_until_saturday == 0:
-        days_until_saturday = 7
+    days_until_saturday = (5 - now.weekday()) % 7 or 7
     saturday_date = (now + timedelta(days=days_until_saturday)).strftime("%Y-%m-%d")
 
     msg = (
         f"📅 *Saturday Schedule Check*\n\n"
         f"What timetable is Saturday ({saturday_date})?\n\n"
         f"Reply with:\n"
-        f"  `/saturday Monday` — use Monday's timetable\n"
-        f"  `/saturday holiday` — no classes 🎉\n"
-        f"  `/saturday normal` — normal Saturday timetable"
+        f" `/saturday Monday` — use Monday's timetable\n"
+        f" `/saturday holiday` — no classes 🎉\n"
+        f" `/saturday normal` — normal Saturday timetable"
     )
     for chat_id in _get_all_chat_ids():
         _run_async(send_message(chat_id, msg))
-
 
 def reset_daily_overrides():
     conn = get_conn()
@@ -129,7 +119,6 @@ def reset_daily_overrides():
     conn.commit()
     conn.close()
     print("[Scheduler] Daily overrides reset.")
-
 
 def start_scheduler():
     tz = pytz.timezone(TIMEZONE)
