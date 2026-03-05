@@ -31,7 +31,7 @@ Keep it friendly, under 150 words. Use emojis. Give a short motivational line at
 
     try:
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300
         )
@@ -69,7 +69,7 @@ Give a structured weekly overview with priorities and a motivational closing. Un
 
     try:
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400
         )
@@ -93,4 +93,5 @@ def build_escalation_message(item, days_left):
         f"{emoji} *{item['subject']}* ({item['type']})\n"
         f"📅 Due: {item['due_date']}"
     )
+
 
