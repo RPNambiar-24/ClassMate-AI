@@ -37,11 +37,13 @@ Keep it friendly, under 150 words. Use emojis. Give a short motivational line at
         )
         ai_text = response.choices[0].message.content.strip()
     except Exception as e:
+        print(f"[Groq Error] {e}")
         # Fallback to plain summary if Groq fails
         ai_text = f"📅 *{today}'s Schedule*\n\n"
         ai_text += "\n".join([f"🕐 {c['time']} — {c['subject']}" for c in classes]) or "No classes 🎉"
         ai_text += "\n\n📌 *Pending Tasks*\n"
         ai_text += "\n".join([f"📝 {p['subject']} — {p['due_date']}" for p in pending]) or "All clear! ✅"
+
 
     return ai_text
 
@@ -91,3 +93,4 @@ def build_escalation_message(item, days_left):
         f"{emoji} *{item['subject']}* ({item['type']})\n"
         f"📅 Due: {item['due_date']}"
     )
+
