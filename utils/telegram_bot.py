@@ -20,4 +20,3 @@ async def send_message(chat_id: int, text: str, reply_markup=None):
         parse_mode="Markdown",
         reply_markup=reply_markup
     )
-
