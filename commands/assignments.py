@@ -1,37 +1,25 @@
 import json
 from datetime import datetime
+from data.db import get_conn
 from utils.google_calendar import create_event, delete_event_by_title
 
-ASSIGNMENTS_PATH = "data/assignments.json"
 
-
-def _load():
-    with open(ASSIGNMENTS_PATH, "r") as f:
-        return json.load(f)
-
-
-def _save(data):
-    with open(ASSIGNMENTS_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def add_assignment(subject: str, due_date: str, type_: str = "assignment") -> str:
+def add_assignment(chat_id: int, subject: str, due_date: str, type_: str = "assignment") -> str:
     try:
         datetime.strptime(due_date, "%Y-%m-%d")
     except ValueError:
         return "❌ Invalid date. Use *YYYY-MM-DD* (e.g. 2026-03-01)."
 
-    data = _load()
-    entry = {
-        "id": len(data) + 1,
-        "type": type_,
-        "subject": subject,
-        "due_date": due_date,
-        "done": False,
-        "added_on": datetime.now().strftime("%Y-%m-%d"),
-    }
-    data.append(entry)
-    _save(data)
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO assignments (chat_id, type, subject, due_date, done, added_on) VALUES (?,?,?,?,0,?)",
+        (chat_id, type_, subject, due_date, datetime.now().strftime("%Y-%m-%d"))
+    )
+    conn.commit()
+    row = conn.execute(
+        "SELECT id FROM assignments WHERE chat_id=? ORDER BY id DESC LIMIT 1", (chat_id,)
+    ).fetchone()
+    conn.close()
 
     emoji = "📝" if type_ == "assignment" else "📋"
     type_label = "Assignment" if type_ == "assignment" else "Test"
@@ -42,30 +30,30 @@ def add_assignment(subject: str, due_date: str, type_: str = "assignment") -> st
         f"{emoji} *{type_label} Added!*\n"
         f"📚 Subject: *{subject}*\n"
         f"📅 Due: *{due_date}* ({days_left}d left)\n"
-        f"🆔 ID: #{entry['id']}\n"
+        f"🆔 ID: #{row['id']}\n"
         f"{calendar_msg}"
     )
 
 
-def view_assignments(filter_type: str = None) -> str:
-    data = _load()
+def view_assignments(chat_id: int, filter_type: str = None) -> str:
+    conn = get_conn()
     today = datetime.now().strftime("%Y-%m-%d")
-    pending = [d for d in data if not d["done"] and d["due_date"] >= today]
+    query = "SELECT * FROM assignments WHERE chat_id=? AND done=0 AND due_date>=? ORDER BY due_date"
+    rows = conn.execute(query, (chat_id, today)).fetchall()
+    conn.close()
 
+    pending = [dict(r) for r in rows]
     if filter_type:
-        pending = [d for d in pending if d["type"] == filter_type]
+        pending = [r for r in pending if r["type"] == filter_type]
 
     if not pending:
         return "🎉 No pending items!"
 
-    pending.sort(key=lambda x: x["due_date"])
-
-    if filter_type == "assignment":
-        header = "📝 *Upcoming Assignments*\n"
-    elif filter_type == "test":
-        header = "📋 *Upcoming Tests*\n"
-    else:
-        header = "📌 *All Upcoming Tasks*\n"
+    header = {
+        "assignment": "📝 *Upcoming Assignments*\n",
+        "test": "📋 *Upcoming Tests*\n",
+        None: "📌 *All Upcoming Tasks*\n"
+    }[filter_type]
 
     lines = [header]
     for item in pending:
@@ -79,46 +67,61 @@ def view_assignments(filter_type: str = None) -> str:
     return "\n".join(lines)
 
 
-def mark_done(item_id: int) -> str:
-    data = _load()
-    for item in data:
-        if item["id"] == item_id:
-            item["done"] = True
-            _save(data)
-            delete_event_by_title(item["subject"], item["due_date"])
-            emoji = "📝" if item["type"] == "assignment" else "📋"
-            return f"✅ {emoji} *{item['subject']}* marked as done!"
-    return f"❌ No item with ID #{item_id}."
+def mark_done(chat_id: int, item_id: int) -> str:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM assignments WHERE id=? AND chat_id=?", (item_id, chat_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return f"❌ No item with ID #{item_id}."
+    conn.execute("UPDATE assignments SET done=1 WHERE id=?", (item_id,))
+    conn.commit()
+    conn.close()
+    delete_event_by_title(row["subject"], row["due_date"])
+    emoji = "📝" if row["type"] == "assignment" else "📋"
+    return f"✅ {emoji} *{row['subject']}* marked as done!"
 
 
-def delete_assignment(item_id: int) -> str:
-    data = _load()
-    for item in data:
-        if item["id"] == item_id:
-            delete_event_by_title(item["subject"], item["due_date"])
-            data.remove(item)
-            _save(data)
-            return f"🗑️ Deleted *{item['subject']}* (#{item_id})."
-    return f"❌ No item with ID #{item_id}."
+def delete_assignment(chat_id: int, item_id: int) -> str:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT * FROM assignments WHERE id=? AND chat_id=?", (item_id, chat_id)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return f"❌ No item with ID #{item_id}."
+    conn.execute("DELETE FROM assignments WHERE id=?", (item_id,))
+    conn.commit()
+    conn.close()
+    delete_event_by_title(row["subject"], row["due_date"])
+    return f"🗑️ Deleted *{row['subject']}* (#{item_id})."
 
 
-def get_due_soon(days: int = 1) -> list:
-    data = _load()
-    res = []
-    for item in data:
-        if item["done"]:
-            continue
+def get_due_soon(chat_id: int, days: int = 1) -> list:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT * FROM assignments WHERE chat_id=? AND done=0", (chat_id,)
+    ).fetchall()
+    conn.close()
+    result = []
+    for row in rows:
         try:
-            due = datetime.strptime(item["due_date"], "%Y-%m-%d")
+            due = datetime.strptime(row["due_date"], "%Y-%m-%d")
             diff = (due - datetime.now()).days
             if 0 <= diff <= days:
-                res.append(item)
+                result.append(dict(row))
         except Exception:
             pass
-    return res
+    return result
 
 
-def get_all_pending() -> list:
-    data = _load()
+def get_all_pending(chat_id: int) -> list:
+    conn = get_conn()
     today = datetime.now().strftime("%Y-%m-%d")
-    return [d for d in data if not d["done"] and d["due_date"] >= today]
+    rows = conn.execute(
+        "SELECT * FROM assignments WHERE chat_id=? AND done=0 AND due_date>=?",
+        (chat_id, today)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
