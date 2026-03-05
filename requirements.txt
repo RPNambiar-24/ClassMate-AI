@@ -1,4 +1,4 @@
-python-telegram-bot==20.7
+python-telegram-bot==21.6
 APScheduler
 python-dotenv
 groq
@@ -8,3 +8,4 @@ google-auth
 google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
+
