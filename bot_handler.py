@@ -1,129 +1,254 @@
-from utils.whatsapp import send_message
+import json
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from data.db import is_registered, register_user, get_user_name
 from commands.timetable import (
     view_timetable, add_class, remove_class,
-    override_today, clear_override, set_saturday_override
+    override_today, clear_override, set_saturday_override, import_timetable
 )
 from commands.assignments import (
     add_assignment, view_assignments, mark_done, delete_assignment
 )
-from commands.summary import build_daily_summary
+from commands.summary import build_daily_summary, build_weekly_report
 
 
-HELP_TEXT = """
-🤖 *WhatsApp Study Bot — Commands*
+def main_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📅 Today's Timetable", callback_data="tt_today"),
+         InlineKeyboardButton("📅 Full Week", callback_data="tt_all")],
+        [InlineKeyboardButton("📝 Assignments", callback_data="view_assignments"),
+         InlineKeyboardButton("📋 Tests", callback_data="view_tests")],
+        [InlineKeyboardButton("📌 All Tasks", callback_data="view_tasks"),
+         InlineKeyboardButton("🌅 AI Summary", callback_data="summary")],
+        [InlineKeyboardButton("📊 Weekly Report", callback_data="weekly")],
+    ])
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    name = update.effective_user.first_name or "Student"
+
+    if not is_registered(chat_id):
+        register_user(chat_id, name)
+        await update.message.reply_text(
+            f"👋 Welcome to *ClassMate AI*, {name}!\n\n"
+            f"I'm your personal academic assistant. I'll remind you about classes, "
+            f"track assignments, and send you AI-powered daily summaries.\n\n"
+            f"*To get started, import your timetable:*\n"
+            f"Send a JSON file of your timetable or use `/addclass` to add classes manually.\n\n"
+            f"Type /help to see all commands.",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            f"👋 Welcome back, *{name}*!",
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard()
+        )
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+🤖 *ClassMate AI — Commands*
 
 📅 *Timetable*
-  !tt                    — Today's timetable
-  !tt Monday             — Specific day
-  !tt all                — Full week
-  !add_class [Day] [HH:MM] [Subject]
-  !remove_class [Day] [HH:MM]
-  !override [HH:MM Subject, HH:MM Subject]
-  !clear_override
-  !saturday [Day/holiday/normal]
+  /tt — Today's timetable
+  /tt Monday — Specific day
+  /tt all — Full week
+  /addclass Day HH:MM Subject
+  /removeclass Day HH:MM
+  /override HH:MM Subject, HH:MM Subject
+  /clearoverride
+  /saturday Day|holiday|normal
 
 📝 *Assignments & Tests*
-  !tasks                 — All pending
-  !assignments           — Only assignments
-  !tests                 — Only tests
-  !add_assignment [Subject] [YYYY-MM-DD]
-  !add_test [Subject] [YYYY-MM-DD]
-  !done [#id]            — Mark as done
-  !delete [#id]          — Delete item
+  /tasks — All pending
+  /assignments — Only assignments
+  /tests — Only tests
+  /addassignment Subject YYYY-MM-DD
+  /addtest Subject YYYY-MM-DD
+  /done id — Mark as done
+  /delete id — Delete item
 
 🌅 *AI*
-  !summary               — AI summary now
+  /summary — AI summary now
+  /weekly — Weekly report
 
-❓ !help                 — This menu
+📁 *Import*
+  Send a JSON file — auto-imports timetable
+
+❓ /help — This menu
 """.strip()
+    await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=main_menu_keyboard())
 
 
-def handle_message(chat_id: str, text: str):
-    if not text:
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    text = update.message.text.strip()
+
+    if not is_registered(chat_id):
+        register_user(chat_id, update.effective_user.first_name or "Student")
+
+    await update.message.reply_text("❓ Use /help to see all commands.", parse_mode="Markdown")
+
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle JSON file upload for timetable import."""
+    chat_id = update.effective_chat.id
+    doc = update.message.document
+
+    if not doc.file_name.endswith(".json"):
+        await update.message.reply_text("❌ Please send a *.json* file.", parse_mode="Markdown")
         return
 
-    cmd = text.lower().strip()
-    parts = text.strip().split()
+    file = await context.bot.get_file(doc.file_id)
+    content = await file.download_as_bytearray()
 
-    # HELP
-    if cmd in ["!help", "help", "hi", "hello", "start"]:
-        send_message(chat_id, HELP_TEXT)
+    try:
+        timetable_data = json.loads(content.decode("utf-8"))
+        result = import_timetable(chat_id, timetable_data)
+        await update.message.reply_text(result, parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Invalid JSON: {e}")
 
-    # TIMETABLE
-    elif cmd == "!tt":
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    data = query.data
+    await query.answer()
+
+    if data == "tt_today":
         from datetime import datetime
         day = datetime.now().strftime("%A")
-        send_message(chat_id, view_timetable(day))
+        await query.message.reply_text(view_timetable(chat_id, day), parse_mode="Markdown")
 
-    elif cmd.startswith("!tt "):
-        arg = text[4:].strip()
-        send_message(chat_id, view_timetable() if arg.lower() == "all" else view_timetable(arg))
+    elif data == "tt_all":
+        await query.message.reply_text(view_timetable(chat_id), parse_mode="Markdown")
 
-    elif cmd.startswith("!add_class "):
-        args = text[11:].strip().split(" ", 2)
-        if len(args) < 3:
-            send_message(chat_id, "Usage: `!add_class [Day] [HH:MM] [Subject]`")
-        else:
-            send_message(chat_id, add_class(args[0], args[1], args[2]))
+    elif data == "view_tasks":
+        await query.message.reply_text(view_assignments(chat_id), parse_mode="Markdown")
 
-    elif cmd.startswith("!remove_class "):
-        args = text[14:].strip().split(" ", 1)
-        if len(args) < 2:
-            send_message(chat_id, "Usage: `!remove_class [Day] [HH:MM]`")
-        else:
-            send_message(chat_id, remove_class(args[0], args[1]))
+    elif data == "view_assignments":
+        await query.message.reply_text(view_assignments(chat_id, "assignment"), parse_mode="Markdown")
 
-    elif cmd.startswith("!override "):
-        send_message(chat_id, override_today(text[10:].strip()))
+    elif data == "view_tests":
+        await query.message.reply_text(view_assignments(chat_id, "test"), parse_mode="Markdown")
 
-    elif cmd == "!clear_override":
-        send_message(chat_id, clear_override())
+    elif data == "summary":
+        await query.message.reply_text("⏳ Generating summary...", parse_mode="Markdown")
+        summary = build_daily_summary(chat_id)
+        await query.message.reply_text(f"🌅 *Today's Summary*\n\n{summary}", parse_mode="Markdown")
 
-    elif cmd.startswith("!saturday "):
-        arg = text[10:].strip()
-        send_message(chat_id, set_saturday_override(arg))
+    elif data == "weekly":
+        await query.message.reply_text("⏳ Generating weekly report...", parse_mode="Markdown")
+        report = build_weekly_report(chat_id)
+        await query.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
 
-    # ASSIGNMENTS
-    elif cmd == "!tasks":
-        send_message(chat_id, view_assignments())
 
-    elif cmd == "!assignments":
-        send_message(chat_id, view_assignments("assignment"))
+# ---- Individual command handlers ----
 
-    elif cmd == "!tests":
-        send_message(chat_id, view_assignments("test"))
+async def cmd_tt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    arg = " ".join(context.args) if context.args else None
+    if not arg:
+        from datetime import datetime
+        arg = datetime.now().strftime("%A")
+    await update.message.reply_text(view_timetable(chat_id, arg), parse_mode="Markdown")
 
-    elif cmd.startswith("!add_assignment ") or cmd.startswith("!add_test "):
-        is_test = cmd.startswith("!add_test")
-        prefix = len("!add_test ") if is_test else len("!add_assignment ")
-        args = text[prefix:].strip().split(" ", 1)
-        if len(args) < 2:
-            usage = "!add_test [Subject] [YYYY-MM-DD]" if is_test else "!add_assignment [Subject] [YYYY-MM-DD]"
-            send_message(chat_id, f"Usage: `{usage}`")
-        else:
-            type_ = "test" if is_test else "assignment"
-            send_message(chat_id, add_assignment(args[0], args[1], type_))
 
-    elif cmd.startswith("!done "):
-        try:
-            item_id = int(text[6:].strip().replace("#", ""))
-            send_message(chat_id, mark_done(item_id))
-        except ValueError:
-            send_message(chat_id, "Usage: `!done [id]` — e.g. `!done 3`")
+async def cmd_addclass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 3:
+        await update.message.reply_text("Usage: `/addclass Day HH:MM Subject`", parse_mode="Markdown")
+        return
+    result = add_class(chat_id, args[0], args[1], " ".join(args[2:]))
+    await update.message.reply_text(result, parse_mode="Markdown")
 
-    elif cmd.startswith("!delete "):
-        try:
-            item_id = int(text[8:].strip().replace("#", ""))
-            send_message(chat_id, delete_assignment(item_id))
-        except ValueError:
-            send_message(chat_id, "Usage: `!delete [id]` — e.g. `!delete 3`")
 
-    # AI SUMMARY
-    elif cmd == "!summary":
-        send_message(chat_id, "⏳ Generating your AI summary...")
-        summary = build_daily_summary()
-        send_message(chat_id, f"🌅 *Today's Summary*\n\n{summary}")
+async def cmd_removeclass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Usage: `/removeclass Day HH:MM`", parse_mode="Markdown")
+        return
+    await update.message.reply_text(remove_class(chat_id, args[0], args[1]), parse_mode="Markdown")
 
-    # UNKNOWN
-    else:
-        send_message(chat_id, f"❓ Unknown command: *{parts[0]}*\nType *!help* to see all commands.")
+
+async def cmd_override(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    text = " ".join(context.args)
+    await update.message.reply_text(override_today(chat_id, text), parse_mode="Markdown")
+
+
+async def cmd_clearoverride(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(clear_override(update.effective_chat.id), parse_mode="Markdown")
+
+
+async def cmd_saturday(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    arg = " ".join(context.args) if context.args else ""
+    await update.message.reply_text(set_saturday_override(chat_id, arg), parse_mode="Markdown")
+
+
+async def cmd_tasks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(view_assignments(update.effective_chat.id), parse_mode="Markdown")
+
+
+async def cmd_assignments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(view_assignments(update.effective_chat.id, "assignment"), parse_mode="Markdown")
+
+
+async def cmd_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(view_assignments(update.effective_chat.id, "test"), parse_mode="Markdown")
+
+
+async def cmd_addassignment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Usage: `/addassignment Subject YYYY-MM-DD`", parse_mode="Markdown")
+        return
+    await update.message.reply_text(add_assignment(chat_id, args[0], args[1], "assignment"), parse_mode="Markdown")
+
+
+async def cmd_addtest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("Usage: `/addtest Subject YYYY-MM-DD`", parse_mode="Markdown")
+        return
+    await update.message.reply_text(add_assignment(chat_id, args[0], args[1], "test"), parse_mode="Markdown")
+
+
+async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    try:
+        item_id = int(context.args[0].replace("#", ""))
+        await update.message.reply_text(mark_done(chat_id, item_id), parse_mode="Markdown")
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: `/done id` — e.g. `/done 3`", parse_mode="Markdown")
+
+
+async def cmd_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    try:
+        item_id = int(context.args[0].replace("#", ""))
+        await update.message.reply_text(delete_assignment(chat_id, item_id), parse_mode="Markdown")
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: `/delete id` — e.g. `/delete 3`", parse_mode="Markdown")
+
+
+async def cmd_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await update.message.reply_text("⏳ Generating summary...", parse_mode="Markdown")
+    summary = build_daily_summary(chat_id)
+    await update.message.reply_text(f"🌅 *Today's Summary*\n\n{summary}", parse_mode="Markdown")
+
+
+async def cmd_weekly(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    await update.message.reply_text("⏳ Generating weekly report...", parse_mode="Markdown")
+    report = build_weekly_report(chat_id)
+    await update.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
