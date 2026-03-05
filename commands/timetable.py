@@ -2,176 +2,194 @@ import json
 import os
 from datetime import datetime, timedelta
 import pytz
-
-TIMETABLE_PATH = "data/timetable.json"
-OVERRIDES_PATH = "data/overrides.json"
-SATURDAY_OVERRIDES_PATH = "data/saturday_overrides.json"
+from data.db import get_conn
 
 
-def _load_timetable():
-    with open(TIMETABLE_PATH, "r") as f:
-        return json.load(f)
-
-
-def _save_timetable(data):
-    with open(TIMETABLE_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def _load_overrides():
-    with open(OVERRIDES_PATH, "r") as f:
-        return json.load(f)
-
-
-def _save_overrides(data):
-    with open(OVERRIDES_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def _load_saturday_overrides():
-    try:
-        with open(SATURDAY_OVERRIDES_PATH, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_saturday_overrides(data):
-    with open(SATURDAY_OVERRIDES_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def get_today_classes(use_override=True):
+def get_today_classes(chat_id: int, use_override=True):
     today_name = datetime.now().strftime("%A")
     today_date = datetime.now().strftime("%Y-%m-%d")
-    timetable = _load_timetable()
-    classes = timetable.get(today_name, [])
+
+    conn = get_conn()
+    classes = [
+        dict(r) for r in conn.execute(
+            "SELECT time, subject FROM timetable WHERE chat_id=? AND day=? ORDER BY time",
+            (chat_id, today_name)
+        ).fetchall()
+    ]
 
     if use_override:
-        # Check regular daily override first (highest priority)
-        overrides = _load_overrides()
-        if overrides.get("date") == today_date:
-            classes = overrides.get("classes", classes)
+        override = conn.execute(
+            "SELECT date, classes FROM overrides WHERE chat_id=?", (chat_id,)
+        ).fetchone()
+        if override and override["date"] == today_date:
+            classes = json.loads(override["classes"])
 
-        # Check Saturday-specific override
         elif today_name == "Saturday":
-            sat_data = _load_saturday_overrides()
-            if today_date in sat_data:
-                classes = sat_data[today_date]["classes"]
+            sat = conn.execute(
+                "SELECT classes FROM saturday_overrides WHERE chat_id=? AND date=?",
+                (chat_id, today_date)
+            ).fetchone()
+            if sat:
+                classes = json.loads(sat["classes"])
 
+    conn.close()
     return today_name, classes
 
 
-def view_timetable(day: str = None) -> str:
-    timetable = _load_timetable()
-    if day:
-        day = day.capitalize()
-        if day not in timetable:
-            return f"❌ Invalid day: {day}."
-        classes = timetable[day]
-        if not classes:
-            return f"📅 {day}: No classes."
-        lines = [f"📅 *{day} Timetable*"]
-        for c in sorted(classes, key=lambda x: x.get("time", x.get("start", ""))):
-            t = c.get("time", c.get("start"))
-            lines.append(f"  🕐 {t} — {c['subject']}")
-        return "\n".join(lines)
+def view_timetable(chat_id: int, day: str = None) -> str:
+    conn = get_conn()
+    days = [day.capitalize()] if day and day.lower() != "all" else \
+        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
-    lines = ["📅 *Full Weekly Timetable*"]
-    for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
-        day_classes = timetable.get(d, [])
-        if day_classes:
+    lines = []
+    for d in days:
+        rows = conn.execute(
+            "SELECT time, subject FROM timetable WHERE chat_id=? AND day=? ORDER BY time",
+            (chat_id, d)
+        ).fetchall()
+        if rows:
             lines.append(f"\n*{d}*")
-            for c in sorted(day_classes, key=lambda x: x.get("time", x.get("start", ""))):
-                t = c.get("time", c.get("start"))
-                lines.append(f"  🕐 {t} — {c['subject']}")
-    return "\n".join(lines)
+            for r in rows:
+                lines.append(f"  🕐 {r['time']} — {r['subject']}")
+
+    conn.close()
+    if not lines:
+        return "📅 No timetable found. Use /addclass to add classes."
+    header = f"📅 *{day.capitalize()} Timetable*" if day and day.lower() != "all" else "📅 *Full Weekly Timetable*"
+    return header + "\n" + "\n".join(lines)
 
 
-def add_class(day: str, time: str, subject: str) -> str:
-    timetable = _load_timetable()
+def add_class(chat_id: int, day: str, time: str, subject: str) -> str:
     day = day.capitalize()
-    if day not in timetable:
+    valid_days = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    if day not in valid_days:
         return f"❌ Invalid day: {day}"
-    for cls in timetable[day]:
-        if cls.get("time", cls.get("start")) == time:
-            return f"⚠️ Conflict: already *{cls['subject']}* at *{time}* on *{day}*."
-    timetable[day].append({"time": time, "subject": subject})
-    _save_timetable(timetable)
+    conn = get_conn()
+    existing = conn.execute(
+        "SELECT id FROM timetable WHERE chat_id=? AND day=? AND time=?",
+        (chat_id, day, time)
+    ).fetchone()
+    if existing:
+        conn.close()
+        return f"⚠️ Conflict: already a class at *{time}* on *{day}*."
+    conn.execute(
+        "INSERT INTO timetable (chat_id, day, time, subject) VALUES (?,?,?,?)",
+        (chat_id, day, time, subject)
+    )
+    conn.commit()
+    conn.close()
     return f"✅ Added *{subject}* at *{time}* on *{day}*."
 
 
-def remove_class(day: str, time: str) -> str:
-    timetable = _load_timetable()
+def remove_class(chat_id: int, day: str, time: str) -> str:
     day = day.capitalize()
-    if day not in timetable:
-        return f"❌ Invalid day: {day}"
-    before = len(timetable[day])
-    timetable[day] = [c for c in timetable[day] if c.get("time", c.get("start")) != time]
-    if len(timetable[day]) == before:
+    conn = get_conn()
+    result = conn.execute(
+        "DELETE FROM timetable WHERE chat_id=? AND day=? AND time=?",
+        (chat_id, day, time)
+    )
+    conn.commit()
+    conn.close()
+    if result.rowcount == 0:
         return f"❌ No class at {time} on {day}."
-    _save_timetable(timetable)
     return f"✅ Removed class at *{time}* on *{day}*."
 
 
-def override_today(classes_str: str) -> str:
+def override_today(chat_id: int, classes_str: str) -> str:
     today_date = datetime.now().strftime("%Y-%m-%d")
     classes = []
     for entry in classes_str.split(","):
         parts = entry.strip().split(" ", 1)
         if len(parts) == 2:
             classes.append({"time": parts[0].strip(), "subject": parts[1].strip()})
-    _save_overrides({"date": today_date, "classes": classes})
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO overrides (chat_id, date, classes) VALUES (?,?,?)",
+        (chat_id, today_date, json.dumps(classes))
+    )
+    conn.commit()
+    conn.close()
     lines = ["✅ *Today's timetable overridden:*"]
     for c in classes:
         lines.append(f"  🕐 {c['time']} — {c['subject']}")
     return "\n".join(lines)
 
 
-def clear_override() -> str:
-    _save_overrides({"date": "", "classes": []})
+def clear_override(chat_id: int) -> str:
+    conn = get_conn()
+    conn.execute("DELETE FROM overrides WHERE chat_id=?", (chat_id,))
+    conn.commit()
+    conn.close()
     return "✅ Today's override cleared."
 
 
-def set_saturday_override(input_day: str) -> str:
+def set_saturday_override(chat_id: int, input_day: str) -> str:
     tz = pytz.timezone(os.getenv("TIMEZONE", "Asia/Kolkata"))
     now = datetime.now(tz)
-
-    # Find the coming Saturday
     days_until_saturday = (5 - now.weekday()) % 7
     if days_until_saturday == 0:
         days_until_saturday = 7
     saturday_date = (now + timedelta(days=days_until_saturday)).strftime("%Y-%m-%d")
 
     input_day = input_day.strip().capitalize()
+    conn = get_conn()
 
     if input_day == "Holiday":
-        sat_data = _load_saturday_overrides()
-        sat_data[saturday_date] = {"day_used": "holiday", "classes": []}
-        _save_saturday_overrides(sat_data)
-        return f"✅ Saturday ({saturday_date}) set as *Holiday* — no classes. 🎉"
+        conn.execute(
+            "INSERT OR REPLACE INTO saturday_overrides (chat_id, date, day_used, classes) VALUES (?,?,?,?)",
+            (chat_id, saturday_date, "holiday", json.dumps([]))
+        )
+        conn.commit()
+        conn.close()
+        return f"✅ Saturday ({saturday_date}) set as *Holiday* 🎉"
 
     if input_day == "Normal":
-        sat_data = _load_saturday_overrides()
-        if saturday_date in sat_data:
-            del sat_data[saturday_date]
-            _save_saturday_overrides(sat_data)
-        return f"✅ Saturday ({saturday_date}) will use the *normal Saturday* timetable."
-
-    timetable = _load_timetable()
-    if input_day not in timetable:
-        return (
-            f"❌ Invalid: *{input_day}*\n"
-            f"Use a day name (Monday–Sunday), *holiday*, or *normal*."
+        conn.execute(
+            "DELETE FROM saturday_overrides WHERE chat_id=? AND date=?",
+            (chat_id, saturday_date)
         )
+        conn.commit()
+        conn.close()
+        return f"✅ Saturday ({saturday_date}) uses normal Saturday timetable."
 
-    classes = timetable[input_day]
-    sat_data = _load_saturday_overrides()
-    sat_data[saturday_date] = {"day_used": input_day, "classes": classes}
-    _save_saturday_overrides(sat_data)
+    rows = conn.execute(
+        "SELECT time, subject FROM timetable WHERE chat_id=? AND day=? ORDER BY time",
+        (chat_id, input_day)
+    ).fetchall()
 
-    lines = [f"✅ Saturday ({saturday_date}) will follow *{input_day}'s* timetable:"]
-    for c in sorted(classes, key=lambda x: x.get("time", x.get("start", ""))):
-        t = c.get("time", c.get("start"))
-        lines.append(f"  🕐 {t} — {c['subject']}")
+    if not rows:
+        conn.close()
+        return f"❌ No timetable found for *{input_day}*."
+
+    classes = [{"time": r["time"], "subject": r["subject"]} for r in rows]
+    conn.execute(
+        "INSERT OR REPLACE INTO saturday_overrides (chat_id, date, day_used, classes) VALUES (?,?,?,?)",
+        (chat_id, saturday_date, input_day, json.dumps(classes))
+    )
+    conn.commit()
+    conn.close()
+
+    lines = [f"✅ Saturday ({saturday_date}) follows *{input_day}'s* timetable:"]
+    for c in classes:
+        lines.append(f"  🕐 {c['time']} — {c['subject']}")
     return "\n".join(lines)
+
+
+def import_timetable(chat_id: int, timetable_json: dict) -> str:
+    """Import full timetable from JSON dict."""
+    conn = get_conn()
+    conn.execute("DELETE FROM timetable WHERE chat_id=?", (chat_id,))
+    count = 0
+    for day, classes in timetable_json.items():
+        for cls in classes:
+            time_val = cls.get("time", cls.get("start", ""))
+            subject = cls.get("subject", "")
+            if time_val and subject:
+                conn.execute(
+                    "INSERT INTO timetable (chat_id, day, time, subject) VALUES (?,?,?,?)",
+                    (chat_id, day, time_val, subject)
+                )
+                count += 1
+    conn.commit()
+    conn.close()
+    return f"✅ Imported *{count} classes* into your timetable!"
