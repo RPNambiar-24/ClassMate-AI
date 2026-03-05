@@ -10,14 +10,12 @@ import bot_handler as bh
 
 load_dotenv()
 
-
 def main():
     init_db()
     start_scheduler()
 
     app = ApplicationBuilder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
 
-    # Commands
     app.add_handler(CommandHandler("start", bh.start))
     app.add_handler(CommandHandler("help", bh.help_command))
     app.add_handler(CommandHandler("tt", bh.cmd_tt))
@@ -36,18 +34,12 @@ def main():
     app.add_handler(CommandHandler("summary", bh.cmd_summary))
     app.add_handler(CommandHandler("weekly", bh.cmd_weekly))
 
-    # Inline button callbacks
     app.add_handler(CallbackQueryHandler(bh.button_callback))
-
-    # JSON file upload
     app.add_handler(MessageHandler(filters.Document.ALL, bh.handle_document))
-
-    # Fallback text
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bh.handle_text))
 
     print("🤖 ClassMate AI is running...")
     app.run_polling(drop_pending_updates=True)
-
 
 if __name__ == "__main__":
     main()
