@@ -11,16 +11,16 @@ def get_weather() -> str:
         return ""
     try:
         url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
-        response = requests.get(url, timeout=5)
-        data = response.json()
+        r = requests.get(url, timeout=5)
+        data = r.json()
         temp = data["main"]["temp"]
         feels = data["main"]["feels_like"]
         desc = data["weather"][0]["description"].capitalize()
-        humidity = data["main"]["humidity"]
+        hum = data["main"]["humidity"]
         return (
             f"🌤️ *{city} Weather*\n"
             f"  {desc}, {temp}°C (feels {feels}°C)\n"
-            f"  💧 Humidity: {humidity}%"
+            f"  💧 Humidity: {hum}%"
         )
     except Exception as e:
         print(f"[Weather] Error: {e}")
