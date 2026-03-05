@@ -21,6 +21,7 @@ def main_menu_keyboard():
         [InlineKeyboardButton("📌 All Tasks", callback_data="view_tasks"),
          InlineKeyboardButton("🌅 AI Summary", callback_data="summary")],
         [InlineKeyboardButton("📊 Weekly Report", callback_data="weekly")],
+        [InlineKeyboardButton("📅 Set Saturday Timetable", callback_data="saturday_menu")],
     ])
 
 
@@ -130,7 +131,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("⏳ Generating weekly report...")
         report = build_weekly_report(chat_id)
         await query.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
-
+    elif data == "saturday_menu":
+        await query.message.reply_text(
+        "📅 *Set Saturday's Timetable*\n\n"
+        "Reply with one of these commands:\n\n"
+        "`/saturday Monday` — follow Monday's timetable\n"
+        "`/saturday Tuesday` — follow Tuesday's timetable\n"
+        "`/saturday holiday` — no classes 🎉\n"
+        "`/saturday normal` — normal Saturday timetable",
+        parse_mode="Markdown"
+        )
 
 async def cmd_tt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -236,3 +246,4 @@ async def cmd_weekly(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ Generating weekly report...")
     report = build_weekly_report(chat_id)
     await update.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
+
