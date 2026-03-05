@@ -27,7 +27,6 @@ def main_menu_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     name = update.effective_user.first_name or "Student"
-
     if not is_registered(chat_id):
         register_user(chat_id, name)
         await update.message.reply_text(
@@ -84,26 +83,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text = update.message.text.strip()
-
     if not is_registered(chat_id):
         register_user(chat_id, update.effective_user.first_name or "Student")
-
     await update.message.reply_text("❓ Use /help to see all commands.", parse_mode="Markdown")
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle JSON file upload for timetable import."""
     chat_id = update.effective_chat.id
     doc = update.message.document
-
     if not doc.file_name.endswith(".json"):
         await update.message.reply_text("❌ Please send a *.json* file.", parse_mode="Markdown")
         return
-
     file = await context.bot.get_file(doc.file_id)
     content = await file.download_as_bytearray()
-
     try:
         timetable_data = json.loads(content.decode("utf-8"))
         result = import_timetable(chat_id, timetable_data)
@@ -122,31 +114,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from datetime import datetime
         day = datetime.now().strftime("%A")
         await query.message.reply_text(view_timetable(chat_id, day), parse_mode="Markdown")
-
     elif data == "tt_all":
         await query.message.reply_text(view_timetable(chat_id), parse_mode="Markdown")
-
     elif data == "view_tasks":
         await query.message.reply_text(view_assignments(chat_id), parse_mode="Markdown")
-
     elif data == "view_assignments":
         await query.message.reply_text(view_assignments(chat_id, "assignment"), parse_mode="Markdown")
-
     elif data == "view_tests":
         await query.message.reply_text(view_assignments(chat_id, "test"), parse_mode="Markdown")
-
     elif data == "summary":
-        await query.message.reply_text("⏳ Generating summary...", parse_mode="Markdown")
+        await query.message.reply_text("⏳ Generating summary...")
         summary = build_daily_summary(chat_id)
         await query.message.reply_text(f"🌅 *Today's Summary*\n\n{summary}", parse_mode="Markdown")
-
     elif data == "weekly":
-        await query.message.reply_text("⏳ Generating weekly report...", parse_mode="Markdown")
+        await query.message.reply_text("⏳ Generating weekly report...")
         report = build_weekly_report(chat_id)
         await query.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
 
-
-# ---- Individual command handlers ----
 
 async def cmd_tt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -242,13 +226,13 @@ async def cmd_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("⏳ Generating summary...", parse_mode="Markdown")
+    await update.message.reply_text("⏳ Generating summary...")
     summary = build_daily_summary(chat_id)
     await update.message.reply_text(f"🌅 *Today's Summary*\n\n{summary}", parse_mode="Markdown")
 
 
 async def cmd_weekly(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    await update.message.reply_text("⏳ Generating weekly report...", parse_mode="Markdown")
+    await update.message.reply_text("⏳ Generating weekly report...")
     report = build_weekly_report(chat_id)
     await update.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
