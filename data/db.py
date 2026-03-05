@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import datetime
 
 DB_PATH = os.getenv("DB_PATH", "data/classmate.db")
 
@@ -17,7 +18,6 @@ def init_db():
             name TEXT,
             joined_at TEXT
         );
-
         CREATE TABLE IF NOT EXISTS timetable (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id TEXT,
@@ -25,7 +25,6 @@ def init_db():
             subject TEXT,
             time TEXT
         );
-
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id TEXT,
@@ -34,7 +33,6 @@ def init_db():
             due_date TEXT,
             done INTEGER DEFAULT 0
         );
-
         CREATE TABLE IF NOT EXISTS overrides (
             chat_id TEXT,
             date TEXT,
@@ -45,14 +43,13 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_user_name(chat_id):
+def is_registered(chat_id) -> bool:
     conn = get_conn()
-    row = conn.execute("SELECT name FROM users WHERE chat_id=?", (chat_id,)).fetchone()
+    row = conn.execute("SELECT 1 FROM users WHERE chat_id=?", (str(chat_id),)).fetchone()
     conn.close()
-    return row["name"] if row else "Student"
+    return row is not None
 
 def register_user(chat_id, name):
-    from datetime import datetime
     conn = get_conn()
     conn.execute(
         "INSERT OR IGNORE INTO users (chat_id, name, joined_at) VALUES (?, ?, ?)",
@@ -60,3 +57,15 @@ def register_user(chat_id, name):
     )
     conn.commit()
     conn.close()
+
+def get_user_name(chat_id):
+    conn = get_conn()
+    row = conn.execute("SELECT name FROM users WHERE chat_id=?", (str(chat_id),)).fetchone()
+    conn.close()
+    return row["name"] if row else "Student"
+
+def get_all_chat_ids():
+    conn = get_conn()
+    rows = conn.execute("SELECT chat_id FROM users").fetchall()
+    conn.close()
+    return [r["chat_id"] for r in rows]
