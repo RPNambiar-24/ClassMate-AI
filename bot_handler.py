@@ -2,7 +2,7 @@ import os
 import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from data.db import is_registered, register_user, get_user_name
+from data.db import is_registered, register_user, get_user_name, set_dashboard_password
 from commands.timetable import (
     view_timetable, add_class, remove_class,
     override_today, clear_override, set_saturday_override, import_timetable
@@ -29,15 +29,18 @@ def main_menu_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    username = update.effective_user.username or update.effective_user.first_name or "Student"
     name = update.effective_user.first_name or "Student"
+
     if not is_registered(chat_id):
-        register_user(chat_id, name)
+        register_user(chat_id, username)
         await update.message.reply_text(
             f"👋 Welcome to *ClassMate AI*, {name}!\n\n"
             f"I'm your personal academic assistant. I'll remind you about classes, "
             f"track assignments, and send you AI-powered daily summaries.\n\n"
-            f"*To get started, import your timetable:*\n"
-            f"Send a JSON file of your timetable or use `/addclass` to add classes manually.\n\n"
+            f"*To get started:*\n"
+            f"• Send a JSON file or use `/addclass` to add your timetable\n"
+            f"• Set your dashboard password: `/setpassword yourpassword`\n\n"
             f"Type /help to see all commands.",
             parse_mode="Markdown"
         )
@@ -78,6 +81,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🖥️ *Dashboard*
   /dashboard — Open web dashboard
+  /setpassword yourpassword — Set dashboard login password
 
 📁 *Import*
   Send a JSON file — auto-imports timetable
@@ -90,7 +94,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not is_registered(chat_id):
-        register_user(chat_id, update.effective_user.first_name or "Student")
+        register_user(chat_id, update.effective_user.username or update.effective_user.first_name or "Student")
     await update.message.reply_text("❓ Use /help to see all commands.", parse_mode="Markdown")
 
 
@@ -150,7 +154,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = os.getenv("DASHBOARD_URL", "https://your-dashboard.up.railway.app")
         await query.message.reply_text(
             f"🖥️ *ClassMate Dashboard*\n\n"
-            f"View and edit your timetable, tasks and more:\n{url}",
+            f"View and edit your timetable, tasks and more:\n{url}\n\n"
+            f"💡 Set your password first: `/setpassword yourpassword`",
             parse_mode="Markdown"
         )
 
@@ -265,6 +270,35 @@ async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = os.getenv("DASHBOARD_URL", "https://your-dashboard.up.railway.app")
     await update.message.reply_text(
         f"🖥️ *ClassMate Dashboard*\n\n"
-        f"View and edit your timetable, tasks and more:\n{url}",
+        f"View and edit your timetable, tasks and more:\n{url}\n\n"
+        f"💡 Set your password first: `/setpassword yourpassword`",
+        parse_mode="Markdown"
+    )
+
+
+async def cmd_setpassword(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "Usage: `/setpassword yourpassword`\n\n"
+            "This sets your personal dashboard login password.",
+            parse_mode="Markdown"
+        )
+        return
+    password = args[0]
+    if len(password) < 4:
+        await update.message.reply_text(
+            "❌ Password must be at least 4 characters.",
+            parse_mode="Markdown"
+        )
+        return
+    set_dashboard_password(chat_id, password)
+    url = os.getenv("DASHBOARD_URL", "https://your-dashboard.up.railway.app")
+    await update.message.reply_text(
+        f"✅ *Dashboard password set!*\n\n"
+        f"🖥️ Open dashboard: {url}\n"
+        f"🔒 Your password: `{password}`\n\n"
+        f"Keep your password safe — anyone with it can access your data.",
         parse_mode="Markdown"
     )
