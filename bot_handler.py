@@ -1,3 +1,4 @@
+import os
 import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -22,6 +23,7 @@ def main_menu_keyboard():
          InlineKeyboardButton("🌅 AI Summary", callback_data="summary")],
         [InlineKeyboardButton("📊 Weekly Report", callback_data="weekly")],
         [InlineKeyboardButton("📅 Set Saturday Timetable", callback_data="saturday_menu")],
+        [InlineKeyboardButton("🖥️ Open Dashboard", callback_data="dashboard")],
     ])
 
 
@@ -73,6 +75,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🌅 *AI*
   /summary — AI summary now
   /weekly — Weekly report
+
+🖥️ *Dashboard*
+  /dashboard — Open web dashboard
 
 📁 *Import*
   Send a JSON file — auto-imports timetable
@@ -133,14 +138,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
     elif data == "saturday_menu":
         await query.message.reply_text(
-        "📅 *Set Saturday's Timetable*\n\n"
-        "Reply with one of these commands:\n\n"
-        "`/saturday Monday` — follow Monday's timetable\n"
-        "`/saturday Tuesday` — follow Tuesday's timetable\n"
-        "`/saturday holiday` — no classes 🎉\n"
-        "`/saturday normal` — normal Saturday timetable",
-        parse_mode="Markdown"
+            "📅 *Set Saturday's Timetable*\n\n"
+            "Reply with one of these commands:\n\n"
+            "`/saturday Monday` — follow Monday's timetable\n"
+            "`/saturday Tuesday` — follow Tuesday's timetable\n"
+            "`/saturday holiday` — no classes 🎉\n"
+            "`/saturday normal` — normal Saturday timetable",
+            parse_mode="Markdown"
         )
+    elif data == "dashboard":
+        url = os.getenv("DASHBOARD_URL", "https://your-dashboard.up.railway.app")
+        await query.message.reply_text(
+            f"🖥️ *ClassMate Dashboard*\n\n"
+            f"View and edit your timetable, tasks and more:\n{url}",
+            parse_mode="Markdown"
+        )
+
 
 async def cmd_tt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -247,3 +260,11 @@ async def cmd_weekly(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report = build_weekly_report(chat_id)
     await update.message.reply_text(f"📊 *Weekly Report*\n\n{report}", parse_mode="Markdown")
 
+
+async def cmd_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = os.getenv("DASHBOARD_URL", "https://your-dashboard.up.railway.app")
+    await update.message.reply_text(
+        f"🖥️ *ClassMate Dashboard*\n\n"
+        f"View and edit your timetable, tasks and more:\n{url}",
+        parse_mode="Markdown"
+    )
