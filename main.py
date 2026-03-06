@@ -1,17 +1,21 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
     MessageHandler, CallbackQueryHandler, filters
 )
 from data.db import init_db
-from scheduler import start_scheduler
+from scheduler import start_scheduler, set_main_loop
 import bot_handler as bh
 
 load_dotenv()
 
 def main():
     init_db()
+
+    loop = asyncio.get_event_loop()
+    set_main_loop(loop)
     start_scheduler()
 
     app = ApplicationBuilder().token(os.getenv("TELEGRAM_BOT_TOKEN")).build()
@@ -33,13 +37,22 @@ def main():
     app.add_handler(CommandHandler("delete", bh.cmd_delete))
     app.add_handler(CommandHandler("summary", bh.cmd_summary))
     app.add_handler(CommandHandler("weekly", bh.cmd_weekly))
+    app.add_handler(CommandHandler("dashboard", bh.cmd_dashboard))
 
     app.add_handler(CallbackQueryHandler(bh.button_callback))
     app.add_handler(MessageHandler(filters.Document.ALL, bh.handle_document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bh.handle_text))
 
+    async def post_init(application):
+        set_main_loop(asyncio.get_event_loop())
+
+    app.post_init = post_init
+
     print("🤖 ClassMate AI is running...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=["message", "callback_query"]
+    )
 
 if __name__ == "__main__":
     main()
