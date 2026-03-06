@@ -38,6 +38,7 @@ def main():
     app.add_handler(CommandHandler("summary", bh.cmd_summary))
     app.add_handler(CommandHandler("weekly", bh.cmd_weekly))
     app.add_handler(CommandHandler("dashboard", bh.cmd_dashboard))
+    app.add_handler(CommandHandler("setpassword", bh.cmd_setpassword))
 
     app.add_handler(CallbackQueryHandler(bh.button_callback))
     app.add_handler(MessageHandler(filters.Document.ALL, bh.handle_document))
