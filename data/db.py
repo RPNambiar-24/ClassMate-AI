@@ -1,6 +1,5 @@
 import os
 import psycopg2
-import psycopg2.extras
 from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -19,7 +18,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             chat_id TEXT PRIMARY KEY,
             name TEXT,
-            joined_at TEXT
+            joined_at TEXT,
+            dashboard_password TEXT
         );
     """)
     cur.execute("""
@@ -48,6 +48,9 @@ def init_db():
             mapped_day TEXT,
             PRIMARY KEY (chat_id, date)
         );
+    """)
+    cur.execute("""
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_password TEXT;
     """)
     conn.commit()
     cur.close()
@@ -94,3 +97,26 @@ def get_all_chat_ids():
     cur.close()
     conn.close()
     return [r[0] for r in rows]
+
+
+def set_dashboard_password(chat_id, password):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE users SET dashboard_password=%s WHERE chat_id=%s",
+        (password, str(chat_id))
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def verify_dashboard_password(password):
+    """Returns chat_id if password matches any user, else None."""
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT chat_id FROM users WHERE dashboard_password=%s", (password,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row[0] if row else None
